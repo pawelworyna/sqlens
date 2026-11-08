@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sqlens"
+version = "0.1.0"
+description = "Read-only Multi-DB (SQLite, SQL Server, PostgreSQL, MySQL) Inspection MCP Server for GitHub Copilot, Antigravity, Codex, and Hermes"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Pawel" }
+]
+dependencies = [
+    "mcp>=1.2.0",
+    "sqlalchemy>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "pyodbc>=5.0.0",
+    "pymssql>=2.3.0",
+]
+
+[project.optional-dependencies]
+postgres = [
+    "psycopg[binary]>=3.1.0",
+]
+mysql = [
+    "pymysql>=1.1.0",
+    "cryptography>=42.0.0",
+]
+all = [
+    "psycopg[binary]>=3.1.0",
+    "pymysql>=1.1.0",
+    "cryptography>=42.0.0",
+]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+sqlens = "sqlens.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
