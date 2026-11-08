@@ -7,7 +7,10 @@ import sys
 import warnings
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except ModuleNotFoundError:
+    from mcp.server.mcpserver import MCPServer as FastMCP  # type: ignore[no-redef]
 from mcp.types import ToolAnnotations
 
 from sqlens.db import extract_schema, run_readonly_query
