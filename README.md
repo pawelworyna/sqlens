@@ -1,5 +1,7 @@
 # SQLens — Multi-DB Read-Only Inspection MCP Server
 
+[![CI](https://github.com/pawelworyna/sqlens/actions/workflows/ci.yml/badge.svg)](https://github.com/pawelworyna/sqlens/actions/workflows/ci.yml)
+
 **SQLens** to serwer MCP (Model Context Protocol) w Pythonie służący do bezpiecznej inspekcji baz danych **SQLite**, **SQL Server (MSSQL)** oraz opcjonalnie **PostgreSQL** i **MySQL** w trybie tylko do odczytu (`read-only`).
 
 Wymusza na modelu LLM bezpieczny 3-krokowy przepływ pracy:
@@ -14,7 +16,7 @@ Wymusza na modelu LLM bezpieczny 3-krokowy przepływ pracy:
 Sklonuj repozytorium i zainstaluj zależności w wirtualnym środowisku `.venv`:
 
 ```powershell
-git clone https://github.com/<twoj-login>/sqlens.git
+git clone https://github.com/pawelworyna/sqlens.git
 cd sqlens
 
 # Utworzenie środowiska wirtualnego
