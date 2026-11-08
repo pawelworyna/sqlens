@@ -1,31 +1,31 @@
 ---
 name: sqlens
-description: Bezpieczna inspekcja tylko do odczytu (read-only) baz danych SQLite, SQL Server (MSSQL), PostgreSQL oraz MySQL za pomocą serwera MCP sqlens. Używaj zawsze, gdy użytkownik podaje ścieżkę do pliku bazy danych, URI połączenia, connection string lub nazwę profilu bazy i prosi o sprawdzenie danych lub struktury.
+description: Safe, strictly read-only inspection of SQLite, SQL Server (MSSQL), PostgreSQL, and MySQL databases using the sqlens MCP server. Always activate this skill whenever the user provides a database file path, connection URI, ODBC string, or .env profile name and asks to inspect schema or query data.
 ---
 
-# SQLens — Procedura Inspekcji Baz Danych (SQLite, SQL Server, PostgreSQL, MySQL)
+# SQLens — Database Inspection Workflow (SQLite, SQL Server, PostgreSQL, MySQL)
 
-Kiedy użytkownik podaje w prompcie ścieżkę do bazy danych (np. plik `.db` / `.sqlite`), connection string, URI lub nazwę profilu z `.env` oraz opisuje, co chce sprawdzić, **MUSISZ** bezwzględnie przestrzegać poniższej 3-etapowej procedury.
+Whenever the user provides a database target (e.g., a `.db` / `.sqlite` file path, an ODBC connection string, a database URI, or a `.env` profile name) and describes what they want to check, you **MUST** strictly follow this 3-step sequence.
 
-## Krok 1: Weryfikacja istnienia bazy i pobranie schematu (OBOWIĄZKOWY)
-1. **Zawsze jako pierwsze** wywołaj narzędzie `inspect_database(connection_target=...)`.
-2. **Zakaz zgadywania**: Nigdy nie wywołuj `execute_query` w ciemno i nie zgaduj nazw tabel ani kolumn przed wywołaniem `inspect_database`.
-3. Sprawdź pole `exists` w odpowiedzi:
-   - Jeśli `exists: false` — **natychmiast przerwij** dalsze kroki i poinformuj użytkownika o błędzie (np. że plik bazy pod podaną ścieżką nie istnieje lub serwer SQL jest niedostępny). Nie próbuj wykonywać żadnych zapytań SQL.
-   - Jeśli `exists: true` — zapoznaj się z polem `dialect` (`sqlite`, `mssql`, `postgresql`, `mysql`) oraz listą `tables` i `views` (nazwy tabel, schematy, nazwy kolumn, typy danych, klucze główne `primary_keys` i klucze obce `foreign_keys`).
+## Step 1: Verify Existence & Inspect Schema (MANDATORY FIRST STEP)
+1. **Always start** by calling `inspect_database(connection_target=...)`.
+2. **Never guess**: Do NOT call `execute_query` blindly and do NOT guess table or column names before calling `inspect_database`.
+3. Check the `exists` field in the response:
+   - If `exists: false` — **stop immediately** and report the error to the user (e.g., that the database file does not exist at the given path or the SQL server is unreachable). Do not attempt to run any SQL queries.
+   - If `exists: true` — review the `dialect` (`sqlite`, `mssql`, `postgresql`, `mysql`) along with `tables` and `views` (table names, schemas, column names, data types, `primary_keys`, and `foreign_keys`).
 
-## Krok 2: Przetworzenie intencji użytkownika na zapytanie SQL
-Na podstawie poznanego w Kroku 1 schematu oraz dialektu bazy (`dialect`), przetłumacz zamiar użytkownika na pojedyncze zapytanie tylko do odczytu (`SELECT` lub `WITH ... SELECT`):
-- **Dla SQL Server (`dialect == "mssql"`)**:
-  - Używaj `SELECT TOP N ...` zamiast `LIMIT N` (lub `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY` przy `ORDER BY`).
-  - Uwzględniaj nazwę schematu (np. `dbo.TableName` lub `[dbo].[TableName]`).
-  - Używaj nawiasów kwadratowych `[NazwaKolumny]` dla identyfikatorów ze spacjami lub słów kluczowych.
-- **Dla SQLite (`dialect == "sqlite"`), PostgreSQL (`dialect == "postgresql"`), MySQL (`dialect == "mysql"`)**:
-  - Używaj klauzuli `LIMIT N` na końcu zapytania.
-- Używaj wyłącznie rzeczywistych nazw tabel i kolumn zwróconych przez `inspect_database`.
-- Nigdy nie generuj zapytań modyfikujących dane (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `TRUNCATE`, `CREATE`, `EXEC`, `SELECT ... INTO`).
+## Step 2: Translate User Intent into a Dialect-Aware Read-Only SQL Query
+Based on the schema and `dialect` returned in Step 1, translate the user's intent into a single read-only SQL query (`SELECT` or `WITH ... SELECT`):
+- **For SQL Server (`dialect == "mssql"`)**:
+  - Use `SELECT TOP N ...` instead of `LIMIT N` (or `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY` when paired with `ORDER BY`).
+  - Include the schema name (e.g., `dbo.TableName` or `[dbo].[TableName]`).
+  - Use square brackets `[ColumnName]` for identifiers containing spaces or reserved keywords.
+- **For SQLite (`dialect == "sqlite"`), PostgreSQL (`dialect == "postgresql"`), MySQL (`dialect == "mysql"`)**:
+  - Use `LIMIT N` at the end of the query.
+- Use only exact table and column names verified by `inspect_database`.
+- Never generate data-modifying queries (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `TRUNCATE`, `CREATE`, `EXEC`, `SELECT ... INTO`).
 
-## Krok 3: Wykonanie zapytania i prezentacja wyniku
-1. Wywołaj narzędzie `execute_query(connection_target=..., sql_query=..., max_rows=...)`.
-2. Jeśli zapytanie zwróci błąd składniowy, przeanalizuj komunikat błędu w kontekście schematu z Kroku 1, popraw zapytanie i wywołaj `execute_query` ponownie.
-3. Przedstaw użytkownikowi czytelne podsumowanie wyników (np. w tabeli Markdown) oraz pokaż dokładne zapytanie SQL, które zostało wykonane.
+## Step 3: Execute Query & Present Results
+1. Call `execute_query(connection_target=..., sql_query=..., max_rows=...)`.
+2. If the query returns a syntax error, analyze the error against the schema from Step 1, fix the query, and call `execute_query` again.
+3. Present a clear summary of the results (e.g., as a Markdown table) along with the exact SQL query that was executed.

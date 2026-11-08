@@ -1,59 +1,71 @@
 # SQLens — Multi-DB Read-Only Inspection MCP Server
 
 [![CI](https://github.com/pawelworyna/sqlens/actions/workflows/ci.yml/badge.svg)](https://github.com/pawelworyna/sqlens/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**SQLens** to serwer MCP (Model Context Protocol) w Pythonie służący do bezpiecznej inspekcji baz danych **SQLite**, **SQL Server (MSSQL)** oraz opcjonalnie **PostgreSQL** i **MySQL** w trybie tylko do odczytu (`read-only`).
+**SQLens** is a Python Model Context Protocol (MCP) server designed for safe, strictly **read-only** inspection of **SQLite**, **SQL Server (MSSQL)**, **PostgreSQL**, and **MySQL / MariaDB** databases.
 
-Wymusza na modelu LLM bezpieczny 3-krokowy przepływ pracy:
-1. **`inspect_database`**: Sprawdzenie, czy plik bazy danych istnieje (lub czy serwer SQL jest osiągalny), rozpoznanie dialektu (`sqlite`, `mssql`, `postgresql`, `mysql`) oraz pobranie pełnego schematu (tabele, widoki, kolumny, typy danych, klucze główne i obce).
-2. **Konstrukcja zapytania SQL przez LLM**: Przetłumaczenie intencji użytkownika z promptu na zapytanie `SELECT` dopasowane do rzeczywistego schematu i dialektu (np. `SELECT TOP N` w T-SQL vs `LIMIT N` w SQLite/Postgres/MySQL).
-3. **`execute_query`**: Wykonanie zapytania w trybie tylko do odczytu z walidacją bezpieczeństwa i zwrócenie wierszy wyniku.
+It enforces a deterministic 3-step workflow for AI coding agents:
+1. **`inspect_database`**: Verifies whether the database file exists (or the SQL server is reachable), detects the SQL dialect (`sqlite`, `mssql`, `postgresql`, `mysql`), and extracts the full database schema (tables, views, columns, data types, primary keys, and foreign keys).
+2. **Dialect-Aware SQL Generation**: The LLM translates the user's natural-language intent into a valid read-only SQL query tailored to the discovered schema and dialect (e.g., `SELECT TOP N` for T-SQL / SQL Server vs. `LIMIT N` for SQLite / PostgreSQL / MySQL).
+3. **`execute_query`**: Validates that the query is strictly read-only (`SELECT`, `WITH`, `EXPLAIN`, `PRAGMA`, `SHOW`) and executes it safely with row limits and automatic JSON serialization.
 
 ---
 
-## Instalacja
+## Key Features
 
-Sklonuj repozytorium i zainstaluj zależności w wirtualnym środowisku `.venv`:
+- **Multi-Database Support**:
+  - **SQLite**: Validates file existence and checks the 16-byte SQLite header before connecting via `?mode=ro&uri=true` + `PRAGMA query_only = ON` (never creates empty files when given a non-existent path).
+  - **SQL Server (MSSQL)**: Built-in support for both raw ODBC connection strings (`pyodbc` with `ApplicationIntent=ReadOnly`) and direct TDS URIs (`pymssql`).
+  - **PostgreSQL & MySQL**: Ready out-of-the-box via SQLAlchemy optional extras (`pip install -e ".[postgres]"` / `pip install -e ".[mysql]"`).
+- **Strict Read-Only Guardrails**: Blocks `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `TRUNCATE`, `CREATE`, `EXEC`, `SELECT ... INTO`, modifying `PRAGMA`s, and stacked semicolon-separated statements.
+- **`.env` Profile Resolution & Password Masking**: Reference database profiles by name (e.g., `MSSQL_LOCAL`) directly in your prompt without exposing credentials in chat history.
+- **Cross-Agent Compatibility**: Clean `stdio` JSON-RPC stream, flat JSON Schema tool parameters, `ToolAnnotations(readOnlyHint=True)`, and built-in instruction files for **GitHub Copilot (VS Code & CLI)**, **Antigravity**, **OpenAI Codex CLI**, and **Hermes**.
+
+---
+
+## Installation
+
+Clone the repository and install it in a virtual environment:
 
 ```powershell
 git clone https://github.com/pawelworyna/sqlens.git
 cd sqlens
 
-# Utworzenie środowiska wirtualnego
+# Create a virtual environment
 python -m venv .venv
 
-# Instalacja SQLens (obsługa SQLite + SQL Server + testy)
+# Install SQLens (includes SQLite + SQL Server support + test suite)
 .\.venv\Scripts\pip install -e ".[dev]"
 
-# OPCJONALNIE: Instalacja ze sterownikami PostgreSQL i MySQL
+# OPTIONAL: Install with PostgreSQL and MySQL drivers
 .\.venv\Scripts\pip install -e ".[all,dev]"
 ```
 
-*(Opcjonalnie)* Jeśli łączysz się z **SQL Server**, **PostgreSQL** lub **MySQL**, możesz zapisać profile połączeń w pliku `.env` w głównym katalogu repozytorium (wzór znajdziesz w [`.env.example`](.env.example)), aby nie podawać haseł w prompcie:
+*(Optional)* If you connect to **SQL Server**, **PostgreSQL**, or **MySQL**, copy [`.env.example`](.env.example) to `.env` in the repository root to define named connection profiles so you don't need to paste passwords in prompts:
 
 ```env
-MSSQL_LOCAL="Driver={ODBC Driver 18 for SQL Server};Server=localhost;Database=MojaBaza;Trusted_Connection=yes;TrustServerCertificate=yes;"
-MSSQL_PROD="mssql+pymssql://uzytkownik:haslo@10.0.0.5:1433/ERP"
+MSSQL_LOCAL="Driver={ODBC Driver 18 for SQL Server};Server=localhost;Database=MyDatabase;Trusted_Connection=yes;TrustServerCertificate=yes;"
+MSSQL_PROD="mssql+pymssql://username:password@10.0.0.5:1433/ERP"
 ```
 
 ---
 
-## Jak użyć SQLens w poszczególnych środowiskach
+## Setup Across AI Environments
 
-> **Uwaga**: W poniższych konfiguracjach zamień `C:/path/to/sqlens` na rzeczywistą ścieżkę do sklonowanego repozytorium na Twoim dysku.
+> **Note**: In the configurations below, replace `C:/path/to/sqlens` with the actual path to your cloned `sqlens` repository.
 
-### 1. GitHub Copilot w VS Code
+### 1. GitHub Copilot in VS Code
 
-#### A. Użycie lokalne (w tym repozytorium)
-Plik [`.vscode/mcp.json`](.vscode/mcp.json) oraz instrukcje [`.github/copilot-instructions.md`](.github/copilot-instructions.md) są już skonfigurowane w projekcie.
-1. Otwórz folder repozytorium w VS Code.
-2. Otwórz **GitHub Copilot Chat** (`Ctrl+Alt+I`) i przełącz tryb na **Agent Mode**.
-3. Kliknij ikonę narzędzi (🔧) w polu czatu — zobaczysz aktywny serwer **`sqlens`** z narzędziami `inspect_database` oraz `execute_query`.
+#### A. Workspace Configuration (Included)
+This repository already includes [`.vscode/mcp.json`](.vscode/mcp.json) and [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
+1. Open the repository folder in VS Code.
+2. Open **GitHub Copilot Chat** (`Ctrl+Alt+I`) and switch to **Agent Mode**.
+3. Click the Tools icon (🔧) in the chat input — you will see **`sqlens`** with `inspect_database` and `execute_query`.
 
-#### B. Użycie globalne (w dowolnym projekcie w VS Code)
-Aby korzystać z `sqlens` w każdym otwartym projekcie:
-1. W VS Code naciśnij `Ctrl+Shift+P` -> wybierz **MCP: Open User Configuration** (lub otwórz swój plik `settings.json`).
-2. Dodaj konfigurację:
+#### B. Global Configuration (Use in Any Project)
+1. Press `Ctrl+Shift+P` -> select **MCP: Open User Configuration** (or open your global `settings.json`).
+2. Add the server definition:
 ```json
 {
   "mcp": {
@@ -75,9 +87,9 @@ Aby korzystać z `sqlens` w każdym otwartym projekcie:
 
 ### 2. GitHub Copilot CLI (`copilot`)
 
-**GitHub Copilot Coding Agent CLI** obsługuje serwery MCP oraz automatycznie wczytuje pliki [`AGENTS.md`](AGENTS.md) i [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
+**GitHub Copilot Coding Agent CLI** supports MCP servers and automatically loads [`AGENTS.md`](AGENTS.md) and [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
 
-1. Dodaj serwer do globalnej konfiguracji MCP dla Copilot CLI (`~/.copilot/mcp-config.json`):
+1. Add `sqlens` to your global Copilot CLI MCP configuration (`~/.copilot/mcp-config.json`):
 ```json
 {
   "mcpServers": {
@@ -92,18 +104,17 @@ Aby korzystać z `sqlens` w każdym otwartym projekcie:
   }
 }
 ```
-2. Możesz też dodać serwer interaktywnie z poziomu CLI:
-   - Uruchom `copilot`, wpisz komendę `/mcp add` i podaj:
-     - **Name**: `sqlens`
-     - **Command**: `C:/path/to/sqlens/.venv/Scripts/python.exe -m sqlens`
+2. Alternatively, register it interactively inside `copilot` CLI using `/mcp add`:
+   - **Name**: `sqlens`
+   - **Command**: `C:/path/to/sqlens/.venv/Scripts/python.exe -m sqlens`
 
 ---
 
 ### 3. Antigravity
 
-Projekt posiada gotowy Skill w [`.agents/skills/sqlens/SKILL.md`](.agents/skills/sqlens/SKILL.md) oraz reguły w [`AGENTS.md`](AGENTS.md).
+This project includes a ready-to-use Skill at [`.agents/skills/sqlens/SKILL.md`](.agents/skills/sqlens/SKILL.md) and workspace rules in [`AGENTS.md`](AGENTS.md).
 
-1. Dodaj serwer `sqlens` do pliku konfiguracji MCP Antigravity (`~/.gemini/antigravity/mcp_config.json`):
+1. Add `sqlens` to your Antigravity MCP configuration (`~/.gemini/antigravity/mcp_config.json`):
 ```json
 {
   "mcpServers": {
@@ -117,7 +128,7 @@ Projekt posiada gotowy Skill w [`.agents/skills/sqlens/SKILL.md`](.agents/skills
   }
 }
 ```
-2. *(Opcjonalnie — Skill globalny)* Aby Antigravity pamiętał procedurę `SKILL.md` także wtedy, gdy pracujesz w innym repozytorium, skopiuj folder `.agents/skills/sqlens` do globalnego katalogu skilli Antigravity:
+2. *(Optional — Global Skill)* To make the `sqlens` workflow skill available across all workspaces in Antigravity, copy `.agents/skills/sqlens` to your global skills directory:
 ```powershell
 Copy-Item -Recurse -Force ".\.agents\skills\sqlens" "$HOME\.gemini\antigravity\skills\sqlens"
 ```
@@ -126,9 +137,9 @@ Copy-Item -Recurse -Force ".\.agents\skills\sqlens" "$HOME\.gemini\antigravity\s
 
 ### 4. OpenAI Codex CLI (`codex`)
 
-Codex CLI natywnie wspiera serwery MCP w pliku `~/.codex/config.toml` oraz automatycznie czyta instrukcje z [`AGENTS.md`](AGENTS.md) (a także z globalnego `~/.codex/AGENTS.md`).
+Codex CLI natively supports MCP servers in `~/.codex/config.toml` and automatically reads instructions from [`AGENTS.md`](AGENTS.md) (as well as `~/.codex/AGENTS.md`).
 
-1. Otwórz (lub utwórz) plik `~/.codex/config.toml` i dodaj sekcję:
+1. Open (or create) `~/.codex/config.toml` and add:
 ```toml
 [mcp_servers.sqlens]
 command = 'C:/path/to/sqlens/.venv/Scripts/python.exe'
@@ -137,19 +148,19 @@ env = { "PYTHONUTF8" = "1" }
 startup_timeout_sec = 15
 tool_timeout_sec = 60
 ```
-2. *(Alternatywnie z linii komend)* Możesz zarejestrować serwer poleceniem:
+2. *(Alternative via CLI)* Register the server directly from the terminal:
 ```powershell
 codex mcp add sqlens -- C:/path/to/sqlens/.venv/Scripts/python.exe -m sqlens
 ```
-3. *(Opcjonalnie — instrukcje globalne)* Aby Codex w każdym katalogu pamiętał o kolejności `inspect_database` -> `execute_query`, możesz dopisać zawartość pliku [`AGENTS.md`](AGENTS.md) do `~/.codex/AGENTS.md`.
+3. *(Optional — Global Instructions)* To enforce the `inspect_database` -> `execute_query` sequence in any directory, append the contents of [`AGENTS.md`](AGENTS.md) to `~/.codex/AGENTS.md`.
 
 ---
 
 ### 5. Hermes (`hermes-agent`)
 
-Hermes obsługuje serwery MCP przez `stdio` oraz natywnie wspiera system skilli `SKILL.md`.
+Hermes supports MCP servers over `stdio` as well as `SKILL.md` skills.
 
-1. Otwórz plik konfiguracyjny Hermesa (`~/.hermes/config.yaml`) i dodaj wpis w sekcji `mcp_servers`:
+1. Open your Hermes configuration file (`~/.hermes/config.yaml`) and add `sqlens` under `mcp_servers`:
 ```yaml
 mcp_servers:
   sqlens:
@@ -160,7 +171,7 @@ mcp_servers:
     env:
       PYTHONUTF8: "1"
 ```
-2. Skopiuj skill [`.agents/skills/sqlens/SKILL.md`](.agents/skills/sqlens/SKILL.md) do katalogu skilli Hermesa (`~/.hermes/skills/sqlens/SKILL.md`), aby Hermes zawsze stosował 3-etapową procedurę:
+2. Copy [`.agents/skills/sqlens/SKILL.md`](.agents/skills/sqlens/SKILL.md) to your global Hermes skills folder (`~/.hermes/skills/sqlens/SKILL.md`):
 ```powershell
 New-Item -ItemType Directory -Force -Path "$HOME\.hermes\skills\sqlens"
 Copy-Item -Force ".\.agents\skills\sqlens\SKILL.md" "$HOME\.hermes\skills\sqlens\SKILL.md"
@@ -168,35 +179,35 @@ Copy-Item -Force ".\.agents\skills\sqlens\SKILL.md" "$HOME\.hermes\skills\sqlens
 
 ---
 
-## Przykłady użycia w prompcie (identyczne w każdym środowisku)
+## Usage Examples in Prompts
 
-Niezależnie od tego, czy piszesz w **GitHub Copilot**, **Antigravity**, **Codex** czy **Hermes**, po prostu podajesz namiar na bazę i piszesz co chcesz sprawdzić:
+Regardless of whether you use **GitHub Copilot**, **Antigravity**, **Codex**, or **Hermes**, simply provide the `connection_target` (file path, `.env` profile name, ODBC string, or URI) and describe what you want to check:
 
-- **SQLite (ścieżka do pliku)**:
-  > *"Sprawdź w bazie `C:/dane/sklep.db` jakie są tabele i pokaż 5 klientów z największą sumą zamówień."*
+- **SQLite (file path)**:
+  > *"Check the database at `C:/data/shop.db`, list its tables, and show the top 5 customers by total order amount."*
 
-- **SQL Server (przez nazwę profilu z `.env`)**:
-  > *"W bazie `MSSQL_LOCAL` sprawdź strukturę tabel związanych z fakturami i wypisz 10 ostatnich nieopłaconych faktur."*
+- **SQL Server (via `.env` profile name)**:
+  > *"In database `MSSQL_LOCAL`, inspect the invoice tables and list the 10 most recent unpaid invoices."*
 
-- **SQL Server (przez bezpośredni connection string / URI)**:
-  > *"Sprawdź w bazie `mssql+pymssql://sa:Haslo123@localhost:1433/Magazyn` stany magazynowe produktów, których ilość spadła poniżej 5 sztuk."*
+- **SQL Server (via direct URI or ODBC string)**:
+  > *"Check `mssql+pymssql://sa:Pass123@localhost:1433/Inventory` for products where stock quantity is below 5."*
 
 - **PostgreSQL / MySQL**:
-  > *"Sprawdź w `postgresql://postgres:secret@localhost:5432/analytics` ilu nowych użytkowników zarejestrowało się w ostatnim miesiącu."*
+  > *"Inspect `postgresql://postgres:secret@localhost:5432/analytics` and count new user signups per day over the last 7 days."*
 
-Co zrobi agent pod spodem:
-1. Najpierw wywoła `inspect_database(connection_target=...)` — sprawdzi czy baza istnieje, odczyta dialekt (`sqlite` / `mssql` / `postgresql` / `mysql`) i pobierze wszystkie tabele, kolumny oraz klucze obce.
-2. Następnie sam ułoży zapytanie `SELECT` dopasowane do schematu i dialektu (np. `SELECT TOP 10` dla SQL Servera lub `LIMIT 5` dla SQLite).
-3. Na końcu wywoła `execute_query(connection_target=..., sql_query=...)` i zaprezentuje wynik.
+### What Happens Under the Hood:
+1. The agent calls **`inspect_database(connection_target=...)`** first to verify that the database exists, check its SQL dialect (`sqlite`, `mssql`, `postgresql`, `mysql`), and inspect all tables, columns, primary keys, and foreign keys.
+2. The agent crafts a read-only `SELECT` query matching the exact schema and dialect (e.g., `SELECT TOP 10` for SQL Server vs. `LIMIT 5` for SQLite).
+3. The agent calls **`execute_query(connection_target=..., sql_query=...)`** and presents the results clearly.
 
 ---
 
-## Uruchamianie testów
+## Running Tests
 
 ```powershell
 .\.venv\Scripts\pytest -v
 ```
 
-## Licencja
+## License
 
 [MIT](LICENSE)

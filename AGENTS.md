@@ -1,23 +1,23 @@
-# Instrukcje dla Agentów AI (Codex, GitHub Copilot, Antigravity, Hermes)
+# AI Agent Instructions (Codex, GitHub Copilot, Antigravity, Hermes)
 
-W tym środowisku dostępny jest serwer MCP **`sqlens`** służący do bezpiecznej inspekcji (tylko do odczytu) baz danych **SQLite**, **SQL Server (MSSQL)**, **PostgreSQL** oraz **MySQL**.
+This environment provides the **`sqlens`** MCP server for safe, strictly read-only inspection of **SQLite**, **SQL Server (MSSQL)**, **PostgreSQL**, and **MySQL** databases.
 
-## Obowiązkowy przepływ pracy z bazami danych (`sqlens`)
+## Mandatory Database Workflow (`sqlens`)
 
-Gdy użytkownik podaje ścieżkę do pliku bazy (np. `C:/.../baza.db`), connection string, URI lub nazwę profilu z `.env` i opisuje co chce sprawdzić:
+Whenever the user provides a database file path (e.g., `C:/.../db.sqlite`), an ODBC connection string, a URI, or a `.env` profile name and describes what they want to inspect or query:
 
-1. **KROK 1 — Sprawdzenie istnienia bazy i pobranie schematu (`inspect_database`)**:
-   - **ZAWSZE** rozpocznij od wywołania `inspect_database(connection_target=...)`.
-   - Nigdy nie uruchamiaj `execute_query` przed wcześniejszym pobraniem schematu przez `inspect_database`.
-   - Jeśli `inspect_database` zwróci `"exists": false`, zatrzymaj się i poinformuj użytkownika, że baza nie istnieje lub jest niedostępna.
+1. **STEP 1 — Verify Existence & Retrieve Schema (`inspect_database`)**:
+   - **ALWAYS** start by calling `inspect_database(connection_target=...)`.
+   - Never call `execute_query` before inspecting the schema via `inspect_database`.
+   - If `inspect_database` returns `"exists": false`, stop immediately and inform the user that the database does not exist or cannot be reached.
 
-2. **KROK 2 — Konstrukcja zapytania SQL dopasowanego do dialektu**:
-   - Sprawdź pole `"dialect"` zwrócone przez `inspect_database`:
-     - **`mssql` (SQL Server)**: używaj składni T-SQL (`SELECT TOP N ...`, `[schema].[table]`, np. `dbo.Users`). Nie używaj `LIMIT`.
-     - **`sqlite` / `postgresql` / `mysql`**: używaj `LIMIT N`.
-   - Korzystaj wyłącznie z dokładnych nazw tabel, widoków, kolumn oraz relacji kluczy obcych odczytanych z `inspect_database`.
-   - Dozwolone są wyłącznie zapytania tylko do odczytu (`SELECT`, `WITH`, `EXPLAIN`, `PRAGMA`, `SHOW`).
+2. **STEP 2 — Construct a Dialect-Specific Read-Only SQL Query**:
+   - Check the `"dialect"` field returned by `inspect_database`:
+     - **`mssql` (SQL Server)**: use T-SQL syntax (`SELECT TOP N ...`, `[schema].[table]`, e.g., `dbo.Users`). Do not use `LIMIT`.
+     - **`sqlite` / `postgresql` / `mysql`**: use `LIMIT N`.
+   - Use only the exact table, view, column, and foreign-key names discovered via `inspect_database`.
+   - Only read-only queries (`SELECT`, `WITH`, `EXPLAIN`, `PRAGMA`, `SHOW`) are permitted.
 
-3. **KROK 3 — Wykonanie zapytania (`execute_query`)**:
-   - Wywołaj `execute_query(connection_target=..., sql_query=...)`.
-   - Zaprezentuj wyniki w czytelnej formie i podaj wykonane zapytanie SQL.
+3. **STEP 3 — Execute Query (`execute_query`)**:
+   - Call `execute_query(connection_target=..., sql_query=...)`.
+   - Present the results clearly and show the executed SQL query.
